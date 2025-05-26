@@ -1,11 +1,11 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { BookOpen, Users, Target, BarChart3, Plus, Trash2 } from 'lucide-react';
+import { BookOpen, Users, Target, BarChart3, Plus, Trash2, Download } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 const Index = () => {
   const [numQuestions, setNumQuestions] = useState(25);
@@ -110,6 +110,99 @@ const Index = () => {
     }
   };
 
+  // Excel export function
+  const exportToExcel = () => {
+    // Create a new workbook
+    const wb = XLSX.utils.book_new();
+
+    // Prepare data for the main sheet
+    const mainData = [];
+    
+    // Add header row
+    const headerRow = ['Student Name', 'Score', 'Percentage'];
+    for (let i = 1; i <= numQuestions; i++) {
+      headerRow.push(`Q${i}`);
+    }
+    mainData.push(headerRow);
+
+    // Add correct answers row
+    const correctRow = ['CORRECT ANSWERS', '', ''];
+    correctAnswers.slice(0, numQuestions).forEach(answer => {
+      correctRow.push(answer);
+    });
+    mainData.push(correctRow);
+
+    // Add student data
+    students.forEach(student => {
+      const score = calculateScore(student.answers);
+      const percentage = Math.round((score / numQuestions) * 100);
+      const row = [student.name, score, `${percentage}%`];
+      student.answers.slice(0, numQuestions).forEach(answer => {
+        row.push(answer);
+      });
+      mainData.push(row);
+    });
+
+    // Create main worksheet
+    const ws1 = XLSX.utils.aoa_to_sheet(mainData);
+
+    // Set column widths
+    const colWidths = [
+      { wch: 20 }, // Student Name
+      { wch: 10 }, // Score
+      { wch: 12 }, // Percentage
+    ];
+    for (let i = 0; i < numQuestions; i++) {
+      colWidths.push({ wch: 8 }); // Question columns
+    }
+    ws1['!cols'] = colWidths;
+
+    // Add the main sheet to workbook
+    XLSX.utils.book_append_sheet(wb, ws1, 'Quiz Results');
+
+    // Create statistics sheet
+    const statsData = [];
+    statsData.push(['Question', 'Correct Count', 'Total Students', 'Percentage', 'Correct Answer']);
+    
+    const questionStats = getQuestionStats();
+    questionStats.slice(0, numQuestions).forEach((stat, index) => {
+      statsData.push([
+        `Question ${stat.question}`,
+        stat.correctCount,
+        stat.totalStudents,
+        `${stat.percentage}%`,
+        correctAnswers[index]
+      ]);
+    });
+
+    // Add summary statistics
+    statsData.push([]);
+    statsData.push(['Summary Statistics']);
+    statsData.push(['Total Questions', numQuestions]);
+    statsData.push(['Total Students', students.length]);
+    statsData.push(['Average Score', averageScore]);
+    statsData.push(['Average Percentage', `${Math.round((averageScore / numQuestions) * 100)}%`]);
+
+    const ws2 = XLSX.utils.aoa_to_sheet(statsData);
+    ws2['!cols'] = [
+      { wch: 15 },
+      { wch: 15 },
+      { wch: 15 },
+      { wch: 12 },
+      { wch: 15 }
+    ];
+
+    // Add the statistics sheet to workbook
+    XLSX.utils.book_append_sheet(wb, ws2, 'Statistics');
+
+    // Generate filename with current date
+    const date = new Date();
+    const filename = `quiz_results_${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}.xlsx`;
+
+    // Write the file
+    XLSX.writeFile(wb, filename);
+  };
+
   const questionStats = getQuestionStats();
   const averageScore = students.length > 0 
     ? Math.round(students.reduce((sum, student) => sum + calculateScore(student.answers), 0) / students.length * 100) / 100
@@ -198,10 +291,16 @@ const Index = () => {
                 onChange={(e) => updateNumQuestions(parseInt(e.target.value) || 1)}
                 className="w-20"
               />
-              <Button onClick={addStudent} className="ml-auto">
-                <Plus className="w-4 h-4 mr-2" />
-                Add Student
-              </Button>
+              <div className="ml-auto flex space-x-2">
+                <Button onClick={exportToExcel} variant="outline">
+                  <Download className="w-4 h-4 mr-2" />
+                  Export to Excel
+                </Button>
+                <Button onClick={addStudent}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Student
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
